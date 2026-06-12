@@ -2,6 +2,9 @@ mod app;
 mod config;
 mod stats;
 
+#[cfg(windows)]
+mod win_memory;
+
 use app::MonitorApp;
 use eframe::egui;
 use stats::create_shared_stats;
@@ -24,7 +27,7 @@ fn main() -> eframe::Result {
             .with_always_on_top()
             .with_decorations(false)
             .with_resizable(false)
-            .with_inner_size([240.0, 220.0])
+            .with_inner_size([240.0, 250.0])
             .with_position(position)
             .with_active(true)
             .with_taskbar(false),

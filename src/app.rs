@@ -139,10 +139,21 @@ impl MonitorApp {
                     .size(12.0)
                     .color(egui::Color32::from_rgb(150, 180, 255)),
             );
-            render_bar_row(ui, "CPU", proc_stats.cpu_percent);
+            render_bar_row_precise(ui, "CPU", proc_stats.cpu_percent);
             ui.label(
-                egui::RichText::new(format!("MEM  {}", format_bytes(proc_stats.memory_bytes)))
-                    .size(13.0),
+                egui::RichText::new(format!(
+                    "WS   {}",
+                    format_bytes(proc_stats.working_set_bytes)
+                ))
+                .size(12.0),
+            );
+            ui.label(
+                egui::RichText::new(format!(
+                    "PWS  {}",
+                    format_bytes(proc_stats.private_working_set_bytes)
+                ))
+                .size(12.0)
+                .color(egui::Color32::from_rgb(150, 180, 255)),
             );
         } else if self.config.watch_process.is_some() {
             ui.label(
@@ -171,10 +182,23 @@ fn paint_drag_grip(painter: &egui::Painter, center: egui::Pos2, color: egui::Col
 }
 
 fn render_bar_row(ui: &mut egui::Ui, label: &str, percent: f32) {
+    render_bar_row_inner(ui, label, percent, |pct| format!("{:.0}%", pct));
+}
+
+fn render_bar_row_precise(ui: &mut egui::Ui, label: &str, percent: f32) {
+    render_bar_row_inner(ui, label, percent, |pct| format!("{:.1}%", pct));
+}
+
+fn render_bar_row_inner(
+    ui: &mut egui::Ui,
+    label: &str,
+    percent: f32,
+    format_pct: impl Fn(f32) -> String,
+) {
     let pct = percent.clamp(0.0, 100.0);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).size(13.0).color(egui::Color32::from_gray(130)));
-        ui.label(egui::RichText::new(format!("{:.0}%", pct)).size(13.0));
+        ui.label(egui::RichText::new(format_pct(pct)).size(13.0));
         ui.add_space(8.0);
         ui.add(
             egui::ProgressBar::new(pct / 100.0)
