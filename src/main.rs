@@ -31,6 +31,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Monitor Widget",
         viewport,
-        Box::new(|cc| Ok(Box::new(MonitorApp::new(cc, shared)))),
+        Box::new(|cc| Ok(Box::new(MonitorApp::new(cc, shared, config)))),
     )
 }

@@ -1,15 +1,14 @@
-use crate::config::{self, AppConfig};
+use crate::config::AppConfig;
 use crate::stats::SharedStats;
 use eframe::egui;
 
 pub struct MonitorApp {
     shared: SharedStats,
-    config_path: std::path::PathBuf,
     config: AppConfig,
 }
 
 impl MonitorApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, shared: SharedStats) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, shared: SharedStats, config: AppConfig) -> Self {
         let mut style = (*cc.egui_ctx.style()).clone();
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
         style.visuals.window_corner_radius = egui::CornerRadius::same(12);
@@ -19,12 +18,8 @@ impl MonitorApp {
         style.text_styles.get_mut(&egui::TextStyle::Small).unwrap().size = 11.0;
         cc.egui_ctx.set_style(style);
 
-        let config_path = config::default_config_path();
-        let config = config::read_config(&config_path).unwrap_or_else(|_| config::default_config());
-
         Self {
             shared,
-            config_path,
             config,
         }
     }

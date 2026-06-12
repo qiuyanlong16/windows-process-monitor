@@ -27,6 +27,7 @@ pub fn read_config(path: &Path) -> Result<AppConfig, String> {
     }
 }
 
+#[allow(dead_code)]
 pub fn write_config(config: &AppConfig, path: &Path) -> Result<(), String> {
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
