@@ -15,16 +15,19 @@ fn main() -> eframe::Result {
 
     let position = match (config.window_x, config.window_y) {
         (Some(x), Some(y)) => egui::Pos2::new(x as f32, y as f32),
-        _ => egui::Pos2::new(1700.0, 10.0),
+        _ => egui::Pos2::new(950.0, 50.0),
     };
 
     let viewport = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_title("")
             .with_always_on_top()
             .with_decorations(false)
-            .with_transparent(true)
             .with_resizable(false)
-            .with_position(position),
+            .with_inner_size([240.0, 220.0])
+            .with_position(position)
+            .with_active(true)
+            .with_taskbar(false),
         ..Default::default()
     };
 
