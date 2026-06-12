@@ -50,7 +50,7 @@ pub fn spawn_stats_collector(shared: SharedStats, watch_process: Option<String>)
         if watch_process.is_some() {
             sys.refresh_processes_specifics(
                 ProcessesToUpdate::All,
-                false,
+                true,
                 ProcessRefreshKind::nothing().with_cpu().with_memory(),
             );
         }
@@ -63,7 +63,7 @@ pub fn spawn_stats_collector(shared: SharedStats, watch_process: Option<String>)
             if watch_process.is_some() {
                 sys.refresh_processes_specifics(
                     ProcessesToUpdate::All,
-                    false,
+                    true,
                     ProcessRefreshKind::nothing().with_cpu().with_memory(),
                 );
             }
@@ -90,27 +90,28 @@ fn normalize_process_name(name: &str) -> String {
 
 fn find_process(sys: &System, name: &str) -> Option<ProcessStats> {
     let watch_base = normalize_process_name(name);
-    let matching: Vec<_> = sys
+    let matching: Vec<(&Process, ProcessMemoryUsage)> = sys
         .processes()
         .values()
         .filter(|p| normalize_process_name(&p.name().to_string_lossy()) == watch_base)
+        .filter_map(|p| process_memory_usage(p).map(|usage| (p, usage)))
         .collect();
 
     if matching.is_empty() {
         return None;
     }
 
-    let cpu_percent: f32 = matching.iter().map(|p| p.cpu_usage()).sum();
+    let cpu_percent: f32 = matching.iter().map(|(p, _)| p.cpu_usage()).sum();
     let (working_set_bytes, private_working_set_bytes) = matching
         .iter()
-        .map(|p| process_memory_usage(p))
+        .map(|(_, usage)| *usage)
         .fold((0u64, 0u64), |(ws, pws), usage| {
             (ws + usage.working_set_bytes, pws + usage.private_working_set_bytes)
         });
     let pid = matching
         .iter()
-        .max_by_key(|p| process_memory_usage(p).working_set_bytes)
-        .map(|p| p.pid().as_u32())
+        .max_by_key(|(_, usage)| usage.working_set_bytes)
+        .map(|(p, _)| p.pid().as_u32())
         .unwrap_or(0);
     let display_name = if matching.len() > 1 {
         format!("{} ({})", watch_base, matching.len())
@@ -133,23 +134,24 @@ struct ProcessMemoryUsage {
     private_working_set_bytes: u64,
 }
 
-fn process_memory_usage(process: &Process) -> ProcessMemoryUsage {
+fn process_memory_usage(process: &Process) -> Option<ProcessMemoryUsage> {
     #[cfg(windows)]
     {
-        if let Some(usage) =
-            crate::win_memory::process_memory_usage(process.pid().as_u32())
-        {
-            return ProcessMemoryUsage {
+        return crate::win_memory::process_memory_usage(process.pid().as_u32()).map(|usage| {
+            ProcessMemoryUsage {
                 working_set_bytes: usage.working_set_bytes,
                 private_working_set_bytes: usage.private_working_set_bytes,
-            };
-        }
+            }
+        });
     }
 
-    let bytes = process.memory();
-    ProcessMemoryUsage {
-        working_set_bytes: bytes,
-        private_working_set_bytes: bytes,
+    #[cfg(not(windows))]
+    {
+        let bytes = process.memory();
+        Some(ProcessMemoryUsage {
+            working_set_bytes: bytes,
+            private_working_set_bytes: bytes,
+        })
     }
 }
 
