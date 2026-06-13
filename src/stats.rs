@@ -108,7 +108,8 @@ fn find_process(sys: &System, name: &str) -> Option<ProcessStats> {
         return None;
     }
 
-    let cpu_percent: f32 = matching.iter().map(|(p, _)| p.cpu_usage()).sum();
+    let cpu_count = sys.cpus().len() as f32;
+    let cpu_percent: f32 = matching.iter().map(|(p, _)| p.cpu_usage()).sum::<f32>() / cpu_count;
     let (working_set_bytes, private_working_set_bytes) = matching
         .iter()
         .map(|(_, usage)| *usage)
