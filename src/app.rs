@@ -1,10 +1,13 @@
 use crate::config::AppConfig;
 use crate::stats::SharedStats;
 use eframe::egui;
+use egui::Theme;
 
 const BG: egui::Color32 = egui::Color32::from_rgb(30, 30, 40);
 const TITLE_BAR_BG: egui::Color32 = egui::Color32::from_rgb(40, 40, 55);
 const TITLE_BAR_HEIGHT: f32 = 22.0;
+const BG_LIGHT: egui::Color32 = egui::Color32::from_rgb(240, 240, 245);
+const TITLE_BAR_BG_LIGHT: egui::Color32 = egui::Color32::from_rgb(225, 225, 235);
 
 pub struct MonitorApp {
     shared: SharedStats,
@@ -13,41 +16,76 @@ pub struct MonitorApp {
 
 impl MonitorApp {
     pub fn new(cc: &eframe::CreationContext<'_>, shared: SharedStats, config: AppConfig) -> Self {
-        let mut style = (*cc.egui_ctx.style()).clone();
-        style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        style.visuals.window_corner_radius = egui::CornerRadius::same(12);
-        style.visuals.window_fill = egui::Color32::from_rgba_unmultiplied(30, 30, 40, 217);
-        style.visuals.widgets.noninteractive.bg_fill =
-            egui::Color32::from_rgba_unmultiplied(40, 40, 55, 180);
-        style.text_styles.get_mut(&egui::TextStyle::Body).unwrap().size = 13.0;
-        style.text_styles.get_mut(&egui::TextStyle::Small).unwrap().size = 11.0;
-        cc.egui_ctx.set_style(style);
+        let apply_style = |theme: Theme, bg: egui::Color32, title_bg: egui::Color32| {
+            cc.egui_ctx.style_mut_of(theme, |style| {
+                style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+                style.visuals.window_corner_radius = egui::CornerRadius::same(12);
+                style.visuals.window_fill = bg;
+                style.visuals.widgets.noninteractive.bg_fill = title_bg;
+                style.text_styles.get_mut(&egui::TextStyle::Body).unwrap().size = 13.0;
+                style.text_styles.get_mut(&egui::TextStyle::Small).unwrap().size = 11.0;
+            });
+        };
+        apply_style(Theme::Dark, BG, TITLE_BAR_BG);
+        apply_style(Theme::Light, BG_LIGHT, TITLE_BAR_BG_LIGHT);
+        cc.egui_ctx.set_theme(egui::ThemePreference::System);
 
         Self { shared, config }
     }
 }
 
+struct ThemeColors {
+    bg: egui::Color32,
+    title_bar_bg: egui::Color32,
+    dim_text: egui::Color32,
+    accent_text: egui::Color32,
+    close_idle: egui::Color32,
+}
+
+impl MonitorApp {
+    fn theme_colors(&self, ctx: &egui::Context) -> ThemeColors {
+        match ctx.system_theme() {
+            Some(Theme::Light) => ThemeColors {
+                bg: BG_LIGHT,
+                title_bar_bg: TITLE_BAR_BG_LIGHT,
+                dim_text: egui::Color32::from_gray(100),
+                accent_text: egui::Color32::from_rgb(60, 90, 200),
+                close_idle: egui::Color32::from_gray(120),
+            },
+            _ => ThemeColors {
+                bg: BG,
+                title_bar_bg: TITLE_BAR_BG,
+                dim_text: egui::Color32::from_gray(130),
+                accent_text: egui::Color32::from_rgb(150, 180, 255),
+                close_idle: egui::Color32::from_gray(160),
+            },
+        }
+    }
+}
+
 impl eframe::App for MonitorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let colors = self.theme_colors(ctx);
+
         egui::TopBottomPanel::top("title_bar")
             .exact_height(TITLE_BAR_HEIGHT)
             .frame(
                 egui::Frame::NONE
-                    .fill(TITLE_BAR_BG)
+                    .fill(colors.title_bar_bg)
                     .inner_margin(egui::Margin::symmetric(8, 0)),
             )
             .show(ctx, |ui| {
-                self.render_title_bar(ui, ctx);
+                self.render_title_bar(ui, ctx, &colors);
             });
 
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
-                    .fill(BG)
+                    .fill(colors.bg)
                     .inner_margin(egui::Margin::symmetric(12, 8)),
             )
             .show(ctx, |ui| {
-                self.render(ui);
+                self.render(ui, &colors);
             });
 
         ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / 30.0));
@@ -55,7 +93,7 @@ impl eframe::App for MonitorApp {
 }
 
 impl MonitorApp {
-    fn render_title_bar(&self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn render_title_bar(&self, ui: &mut egui::Ui, ctx: &egui::Context, colors: &ThemeColors) {
         let bar_rect = ui.max_rect();
         let drag_rect = egui::Rect::from_min_max(
             bar_rect.min,
@@ -88,7 +126,7 @@ impl MonitorApp {
         let close_color = if close_response.hovered() {
             egui::Color32::from_rgb(220, 80, 80)
         } else {
-            egui::Color32::from_gray(160)
+            colors.close_idle
         };
         ui.painter().line_segment(
             [
@@ -109,7 +147,7 @@ impl MonitorApp {
         }
     }
 
-    fn render(&mut self, ui: &mut egui::Ui) {
+    fn render(&mut self, ui: &mut egui::Ui, colors: &ThemeColors) {
         let stats = self.shared.read().unwrap();
 
         ui.separator();
@@ -126,7 +164,7 @@ impl MonitorApp {
                 format_bytes(stats.mem_total)
             ))
             .size(11.0)
-            .color(egui::Color32::from_gray(130)),
+            .color(colors.dim_text),
         );
 
         if stats.watched_process.is_some() {
@@ -134,11 +172,20 @@ impl MonitorApp {
             ui.separator();
         }
         if let Some(ref proc_stats) = stats.watched_process {
-            ui.label(
-                egui::RichText::new(&proc_stats.name)
-                    .size(12.0)
-                    .color(egui::Color32::from_rgb(150, 180, 255)),
-            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(&proc_stats.name)
+                        .size(12.0)
+                        .color(colors.accent_text),
+                );
+                if let Some(ref priv_label) = proc_stats.privilege {
+                    ui.label(
+                        egui::RichText::new(format!("({})", priv_label))
+                            .size(10.0)
+                            .color(colors.dim_text),
+                    );
+                }
+            });
             render_bar_row_precise(ui, "CPU", proc_stats.cpu_percent);
             ui.label(
                 egui::RichText::new(format!(
@@ -152,14 +199,13 @@ impl MonitorApp {
                     "PWS  {}",
                     format_bytes(proc_stats.private_working_set_bytes)
                 ))
-                .size(12.0)
-                .color(egui::Color32::from_rgb(150, 180, 255)),
+                .size(12.0),
             );
         } else if self.config.watch_process.is_some() {
             ui.label(
                 egui::RichText::new("Not running")
                     .size(11.0)
-                    .color(egui::Color32::from_gray(130)),
+                    .color(colors.dim_text),
             );
         }
     }

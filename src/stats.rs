@@ -9,6 +9,7 @@ pub struct ProcessStats {
     pub cpu_percent: f32,
     pub working_set_bytes: u64,
     pub private_working_set_bytes: u64,
+    pub privilege: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,7 +95,13 @@ fn find_process(sys: &System, name: &str) -> Option<ProcessStats> {
         .processes()
         .values()
         .filter(|p| normalize_process_name(&p.name().to_string_lossy()) == watch_base)
-        .filter_map(|p| process_memory_usage(p).map(|usage| (p, usage)))
+        .map(|p| {
+            let usage = process_memory_usage(p).unwrap_or_else(|| ProcessMemoryUsage {
+                working_set_bytes: p.memory(),
+                private_working_set_bytes: p.memory(),
+            });
+            (p, usage)
+        })
         .collect();
 
     if matching.is_empty() {
@@ -125,6 +132,8 @@ fn find_process(sys: &System, name: &str) -> Option<ProcessStats> {
         cpu_percent,
         working_set_bytes,
         private_working_set_bytes,
+        privilege: get_process_privilege(pid)
+            .or_else(|| sys.processes().keys().find(|&&k| k.as_u32() == pid).map(|_| "Elevated".to_string())),
     })
 }
 
@@ -152,6 +161,18 @@ fn process_memory_usage(process: &Process) -> Option<ProcessMemoryUsage> {
             working_set_bytes: bytes,
             private_working_set_bytes: bytes,
         })
+    }
+}
+
+fn get_process_privilege(_pid: u32) -> Option<String> {
+    #[cfg(windows)]
+    {
+        return crate::win_memory::get_process_privilege(_pid).map(|s| s.to_string());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = _pid;
+        None
     }
 }
 
